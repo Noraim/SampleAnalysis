@@ -1,0 +1,213 @@
+import ROOT
+import ctypes 
+import sys 
+import numpy as np 
+import numpy  
+from ROOT import TCanvas, TBrowser, TFile, TPaveText, TPaveStats, TProfile, TNtuple, TH1F, TH2F, TLorentzVector, THStack, TLegend, TCut, TGraph, TPad  
+from ROOT import gROOT, gBenchmark, gSystem, gStyle, TGaxis, TTree 
+from datetime import date 
+
+%jsroot on
+
+def analyze(datasample, aFile):
+    
+    d = date.today()                       
+    tree = 'mini'
+    rootFile = TFile(aFile) 
+    tree_pull = rootFile.Get(tree)
+    nEntries = tree_pull.GetEntries() 
+    
+    #Histograms in 1Dimension 
+    #objects of interest from branch: mini
+    m_yy = TH1F("m_yy","Mass of yy          ;Energy of yy [GeV] ;Number of Events", 60,100,180)                          #1
+    ph_n = TH1F("ph_n","Number of Photons   ;Number of Photons [GeV] ;Number of Events",10,0,10)                         #2 Name in branch: photon_n 
+    jet_n = TH1F("jet_n","Number of Jets    ;Number of Jets [GeV] ;Number of Events", 10,0,10)                           #3 
+    ph_pt = TH1F("ph_pt","Trans-Momentum of Photons ;Transverse Momentum of photons ;Number of Events",100,0,350)        #4 Name in branch: photon_pt 
+    jet_pt = TH1F("jet_pt","Trans-Momentum of Jets  ;Transverse Momentum of Jets ;Number of Events", 100, 10, 400)       #5
+    jjVBF_m = TH1F("jjVBF_m","Mass of Jets (VBF)    ;Mass of Jets [GeV] ;Number of Events",100,900,2400)                 #6
+    jjVBF_deta = TH1F("jjVBF_deta","\delta eta of Jets (VBF) ; \delta eta of dijets (VBF) ;Number of Events",100,-0.5,10.5) #7 
+
+    #ID:isTight --- isolation: is fixed tight and loose  
+    ph_istight = TH1F("ph_istight","isTight Photon           ;Photon isTight ;Number of Events", 6,-2,4)                 #8 Name in branch: photon_isTight 
+    ph_isfixed_tight = TH1F("ph_isfixed_tight","isFixed Tight Photon ;Tight Photons ;Number of Events", 6,-2,4)          #9 Name in branch: photon_isIsoFixedCutTight 
+    ph_isfixed_loose = TH1F("ph_isfixed_loose","isFixed Loose Photon ;Loose Photons ;Number of Events", 6,-2,4)          #10 Name in branch: photon_isIsoFixedCutLoose 
+
+    #B-Tagging to Jets MV2c10_77 
+    MV2c10_fix = TH1F("MV2c10_fix","B-Tagging (Jets)         ;B-Tagging Jets ;Number of Events", 60,-10,10)              #11 Name in branch: MV2c10_FixedCutBEff_77 
+  
+    #Reconstructed objects Di                   Note: all recon. objects will be in letters when filling histos 
+    diph_m = TH1F("diph_m", "  ;Diphoton Mass [GeV] ;Number of Events",60, 100, 200)              #A
+    di_jets = TH1F("di_jets"," ;Dijet Mass [GeV] ;Number of Events",60, -5, 600)                  #B
+    dih_yybb = TH1F("dih_yybb","H->yybb ;Invariant Mass of yybb[GeV] ;Number of Events",100, 100, 1000) #C H-> bb from 2018    
+
+#This is a test for TH2F 
+    DiHiggs_vs_DiJets = TH2F("DiHiggs_vs_DiJets","DiHiggs_vs_DiJets ;DiJets; DiHiggs",60, -5, 600,100, 100, 1000) # # of bins on left 
+
+
+#This is the body of the analysis code. Here you will find cuts, fills, reconstructed event kinematics, TLorentz Vectors, etc. 
+#TLV for H->bb candidate jets from 2018publ. and transverse momentum  
+    jet1 = TLorentzVector()                                     # TLV is a four vector class used to declare a variable  
+    jet2 = TLorentzVector()                                     # that describes position and time or momentum and energy. 
+    jetpt1 = TLorentzVector()                                   # In this case, we deal with momentum and energy 
+    jetpt2 = TLorentzVector()
+
+#Counting all events in file that are true false 
+#    a = numpy.array([tree_pull.photon_isTight]) 
+#    unique, counts = numpy.unique(a, return_counts=True)       # To check: print dict(zip(unique, counts)) 
+
+#Starting a loop for all entries in the mini branch. Here you can easily pull the object of interest from the tree to apply cuts and fills for histograms  
+    for evt in range(nEntries):
+        tree_pull.GetEntry(evt) 
+
+#Applying Cuts relative to H-> yybb production. 
+        if (tree_pull.jet_n < 4): continue                      # Jets ------> interested in number of jets < 4 to  
+        if (tree_pull.photon_n < 2): continue                   # photons ---> interested in number of photons <2 to 
+        if (tree_pull.jjVBF_deta < 5): continue                 #VBF 
+        if (tree_pull.jjVBF_m < 1000): continue                 #VBF 
+        
+        
+#Here we have a special cut. "explain here". 
+#Note: This regime must go in the bottom of the body of code or else it will interfere with some of the data fills in histogram. 
+        
+        count = 0                                               #empty count
+        for phn in range(tree_pull.photon_n):                   #for loop calls branch: number of photons where we are creating variable
+            if tree_pull.photon_isTight == 1:                   #to fill into other branch: is tight photons
+                count += 1                                      #Now that its filled, only interested in strong selections which are in 1
+            if (count<2): continue                              #Fill in count value 
+                                                                #creating cut for count values. Only want events < 2 because 
+                                                                #To check: print(count)
+        countbt = 0 
+        for btag in range(tree_pull.jet_n):                     # CONCEPTUALLY EXPLAIN HERE  
+            if tree_pull.MV2c10_FixedCutBEff_77 == 1: 
+                countbt += 1
+            if (countbt < 2):continue 
+            
+#Simple Fills for histograms of objects with loops 
+        m_yy.Fill(tree_pull.m_yy)                                          #1
+        ph_n.Fill(tree_pull.photon_n)                                      #2    
+        jet_n.Fill(tree_pull.jet_n)                                        #3
+        jjVBF_m.Fill(tree_pull.jjVBF_m)                                    #6 
+        jjVBF_deta.Fill(tree_pull.jjVBF_deta)                              #7 
+
+        for i in range(tree_pull.photon_n): 
+            ph_pt.Fill(tree_pull.photon_pt[i])                             #4
+        for j in range(tree_pull.jet_n):  
+            jet_pt.Fill(tree_pull.jet_pt[j])                               #5
+        for k in range(tree_pull.photon_n): 
+            ph_istight.Fill(tree_pull.photon_isTight[k])                   #8
+        for x in range(tree_pull.photon_n): 
+            ph_isfixed_tight.Fill(tree_pull.photon_isIsoFixedCutTight[x])  #9 
+        for y in range(tree_pull.photon_n): 
+            ph_isfixed_loose.Fill(tree_pull.photon_isIsoFixedCutLoose[y])  #10 
+        for z in range(tree_pull.jet_n): 
+            MV2c10_fix.Fill(tree_pull.MV2c10_FixedCutBEff_77[z])           #11
+         
+        
+#Reference to TLV, we now use cylindrical coordinates DiJets and divide by 1000 to stay in propper units [GeV]
+        jet1.SetPtEtaPhiM(tree_pull.candidateJet_pt[0],tree_pull.candidateJet_eta[0], tree_pull.candidateJet_phi[0], tree_pull.candidateJet_m[0]/1000)
+        jet2.SetPtEtaPhiM(tree_pull.candidateJet_pt[1],tree_pull.candidateJet_eta[1], tree_pull.candidateJet_phi[1], tree_pull.candidateJet_m[1]/1000)
+        jetpt1.SetPtEtaPhiM(tree_pull.photon_pt[0],tree_pull.photon_eta[0],tree_pull.photon_phi[0],0) 
+        jetpt2.SetPtEtaPhiM(tree_pull.photon_pt[1],tree_pull.photon_eta[1],tree_pull.photon_phi[1],0) 
+
+#Next, we conduct basic kinematics to fill the reconstructed variables 
+        diph_v = (jetpt1 + jetpt2)                            #diphotons mass --> mathematically solve for magnitude 
+        diph_mag = diph_v.Mag()                               # to then fill the histogram 
+        diph_m.Fill(diph_mag)                                 #A
+        
+        dijet_v = (jet1 + jet2)
+        dijet_mag = dijet_v.Mag() 
+        di_jets.Fill(dijet_mag)                               #B 
+    
+        yybb18_v = (diph_v + dijet_v) 
+        dih_yybb.Fill(yybb18_v.M())                           #C 
+        DiHiggs_vs_DiJets.Fill(dijet_mag, yybb18_v.M())  
+            
+    outputfile = TFile('plots_'+datasample+'_'+str(d)+'.root', 'recreate') 
+
+    #write the histograms into ROOT file 
+    
+    m_yy.Write()
+    ph_n.Write()
+    jet_n.Write() 
+    ph_pt.Write() 
+    jet_pt.Write()
+    jjVBF_m.Write()
+    jjVBF_deta.Write()
+    
+    ph_istight.Write() 
+    ph_isfixed_tight.Write() 
+    ph_isfixed_loose.Write()
+    MV2c10_fix.Write() 
+    
+    diph_m.Write()
+    di_jets.Write() 
+    dih_yybb.Write() 
+    DiHiggs_vs_DiJets.Write() 
+    
+    outputfile.cd()
+    outputfile.Write() 
+    outputfile.Close()
+    
+    rootFile.Close() 
+    
+
+analyze("signal_300", "/eos/atlas/user/e/ebrost/public/tiny/VBF/mc16a.VBF300.root")
+analyze("background", "/eos/atlas/user/e/ebrost/public/tiny/VBF/yyjets_background/mc16a.yyjets.tiny.root")
+
+d = date.today()                       
+BackgroundFile = TFile("plots_background_"+str(d)+".root")             
+SignalFile = TFile("plots_signal_300_"+str(d)+".root") 
+
+#Drawing objects on Canvas. 
+#Background signal with existing objects from tree "mini" 
+
+#The numbering of the objects represents the order from the histograms.     
+
+#print(NAME OF VARIABLE IN LOOP)
+obj_1 = TCanvas()                                     #1 mass of yy 
+m_yy_plot = SignalFile.Get("di_jets")
+m_yy_plot.SetLineColor(ROOT.kRed-3)
+m_yy_plot.Draw()
+m_yy_plot = BackgroundFile.Get("di_jets")
+m_yy_plot.SetLineColor(ROOT.kBlue+1) 
+m_yy_plot.Draw('same')
+obj_1.Draw() 
+obj_1.SetGrid() 
+
+obj_1.Update()
+
+obj_2 = TCanvas()                                     #2 number of photons
+ph_n_plot = BackgroundFile.Get("ph_n") 
+ph_n_plot.SetLineColor(ROOT.kBlue+1)
+ph_n_plot.Draw()
+ph_n_plot = SignalFile.Get("ph_n")
+ph_n_plot.SetLineColor(ROOT.kRed-3) 
+ph_n_plot.Draw('same')
+obj_2.Draw() 
+obj_2.SetGrid() 
+
+obj_2.Update()
+
+obj_3 = TCanvas()                                     #3 number of jets
+jet_n_plot = BackgroundFile.Get("jet_n")
+jet_n_plot.SetLineColor(ROOT.kBlue+1)
+jet_n_plot.Draw()
+jet_n_plot = SignalFile.Get("jet_n")
+jet_n_plot.SetLineColor(ROOT.kRed-3) 
+jet_n_plot.Draw('same')
+obj_3.Draw() 
+obj_3.SetGrid()
+
+
+obj_3.Update()
+
+obj_4 = TCanvas()                                     #4 transvers momentum of photons
+ph_pt_plot = BackgroundFile.Get("ph_pt")
+ph_pt_plot.SetLineColor(ROOT.kBlue+1)
+ph_pt_plot.Draw()
+ph_pt_plot = SignalFile.Get("ph_pt")
+ph_pt_plot.SetLineColor(ROOT.kRed-3)
+ph_pt_plot.Draw('same')
+obj_4.Draw() 
+obj_4.SetGrid()
+
